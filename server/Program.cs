@@ -122,7 +122,8 @@ builder.Services.AddCors(options =>
             "http://localhost:8080",
             "http://localhost:5173",
             "https://phrollball.vercel.app",
-            "https://phrollballassociation-liart.vercel.app"
+            "https://phrollballassociation-liart.vercel.app",
+            "https://phrollballassociation-liart.vercel.app/"
         )
         .AllowAnyHeader()
         .AllowAnyMethod()
