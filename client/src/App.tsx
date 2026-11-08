@@ -7,7 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import Index from "./pages/LandingPage";
 import Login from "./pages/Login";
-import Register from "./pages/Register";
+// import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
 import VerifyQr from "./pages/VerifyQr";
 import Unauthorized from "./pages/Unauthorized";
@@ -38,7 +38,7 @@ const App = () => (
             {/* Public Routes */}
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
+            {/* <Route path="/register" element={<Register />} /> */}
             <Route path="/verify" element={<VerifyQr />} />
             <Route path="/unauthorized" element={<Unauthorized />} />
 

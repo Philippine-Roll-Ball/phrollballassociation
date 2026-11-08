@@ -9,7 +9,7 @@ export default function Login() {
   const { setAuthSession } = useAuth();
   const navigate = useNavigate();
 
-  const { loginUser, loginGoogle, loading, error} = useLogin();
+  const { loginUser,  loading, error} = useLogin();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   
@@ -36,23 +36,6 @@ const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
 
   // Handle Google Login via Firebase
   const handleGoogleLogin = async () => {
-
-
-      const data = await loginGoogle();
-
-      if(data && data.token) {
-        setAuthSession(data.token, data.role);
-
-        if(data.role === "admin") {
-          navigate("/admin");
-        } else {
-          navigate("/");
-        }
-      }
-
-
-      console.log("Google login successful!", data.user);
-      navigate("/admin");
     
   };
 
