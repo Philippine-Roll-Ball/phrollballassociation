@@ -1,13 +1,11 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Text.Json.Serialization;
-
 
 namespace server.Models
 {
     public abstract class User
     {
-
         [Key]
         [Required]
         [MaxLength(128)]
@@ -16,6 +14,10 @@ namespace server.Models
         [Required]
         [MaxLength(50)]
         public string? Email { get; set; }
+
+        [Required]
+        [MaxLength(255)]
+        public string PasswordHash { get; set; } = string.Empty;
 
         [Required]
         [MaxLength(11)]
@@ -37,7 +39,8 @@ namespace server.Models
         public string? Suffix { get; set; }
 
         [NotMapped]
-        public string? FullName => $"{FirstName} {MiddleName} {LastName} {Suffix}".Trim();
+        public string? FullName =>
+            $"{FirstName} {MiddleName} {LastName} {Suffix}".Trim();
 
         [Required]
         public DateTime BirthDate { get; set; }
@@ -55,23 +58,21 @@ namespace server.Models
         public string? EducationalAttainment { get; set; }
 
         [MaxLength(255)]
-
         public string? ProfileImageUrl { get; set; }
-        [MaxLength(15)]
 
         [Required]
+        [MaxLength(15)]
         public string? Nationality { get; set; }
 
         [Required]
         [MaxLength(30)]
         public string? Occupation { get; set; }
 
-        public List<string?>? OtherSports { get; set; } = new List<string?>();
+        public List<string?>? OtherSports { get; set; } = new();
 
         [Required]
         [MaxLength(10)]
         public string? Role { get; set; }
-
 
         public DateTime DateRegistered { get; set; } = DateTime.UtcNow;
 

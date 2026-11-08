@@ -1,7 +1,5 @@
-import { createContext, useContext, useState, ReactNode } from "react";
-import { signOut as firebaseSignOut } from "firebase/auth";
-import { auth } from "@/config/firebase";
 
+import { createContext, useContext, useState, ReactNode } from "react";
 
 export type AuthContextType = {
   isAuthenticated: boolean;
@@ -10,6 +8,7 @@ export type AuthContextType = {
   setAuthSession: (token: string, userRole: string) => void;
   signOut: () => Promise<void>;
 };
+
 const AuthContext = createContext<AuthContextType>({
   isAuthenticated: false,
   role: null,
@@ -19,7 +18,6 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  
 
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     return !!localStorage.getItem("jwtToken");
@@ -29,34 +27,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return localStorage.getItem("userRole");
   });
 
-
   const [loading] = useState(false);
 
-
   const setAuthSession = (token: string, userRole: string) => {
+    localStorage.setItem("jwtToken", token);
+    localStorage.setItem("userRole", userRole);
+
     setIsAuthenticated(true);
     setRole(userRole);
   };
-  
+
   const signOut = async () => {
-    try {
+    localStorage.removeItem("jwtToken");
+    localStorage.removeItem("userRole");
 
-      localStorage.removeItem("jwtToken");
-      localStorage.removeItem("userRole");
-  
+    setIsAuthenticated(false);
+    setRole(null);
 
-      console.log("user successfully Logged out");
-      setIsAuthenticated(false);
-      setRole(null);
-      
-      await firebaseSignOut(auth); 
-    } catch (error) {
-      console.error("Error signing out:", error);
-    }
+    console.log("User successfully logged out.");
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, role, loading, setAuthSession, signOut }}>
+    <AuthContext.Provider
+      value={{
+        isAuthenticated,
+        role,
+        loading,
+        setAuthSession,
+        signOut,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

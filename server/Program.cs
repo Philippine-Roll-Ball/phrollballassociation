@@ -1,37 +1,46 @@
+
 using System.Security.Claims;
 using System.Text;
-using FirebaseAdmin;
-using Google;
-using System.Threading.RateLimiting;
-using Google.Apis.Auth.OAuth2;
-using Google.Cloud.Firestore;
-using Google.Cloud.Storage.V1;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using server.Data;
 using server.Services;
-using Microsoft.AspNetCore.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ==========================================
+// DATABASE: NEON POSTGRESQL
+// ==========================================
 
-string? firebaseJson = builder.Configuration["Firebase:AdminKeyPath"];
-// Environment.SetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS", firebaseJson);
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    throw new InvalidOperationException(
+        "Database connection string is missing. Configure ConnectionStrings:DefaultConnection."
+    );
+}
 
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(
-        builder.Configuration.GetConnectionString("DefaultConnection"),
-        sqlServerOptions =>
+    options.UseNpgsql(
+        connectionString,
+        npgsqlOptions =>
         {
-            sqlServerOptions.EnableRetryOnFailure(
-                maxRetryCount: 5, 
+            npgsqlOptions.EnableRetryOnFailure(
+                maxRetryCount: 5,
                 maxRetryDelay: TimeSpan.FromSeconds(10),
-                errorNumbersToAdd: null);
-            sqlServerOptions.CommandTimeout(60);
-        }));
+                errorCodesToAdd: null
+            );
+        }
+    )
+);
 
-// Rate Limiter
+// ==========================================
+// RATE LIMITER
+// ==========================================
+
 builder.Services.AddRateLimiter(options =>
 {
     options.AddFixedWindowLimiter("HealthCheckLimit", opt =>
@@ -40,127 +49,138 @@ builder.Services.AddRateLimiter(options =>
         opt.Window = TimeSpan.FromMinutes(1);
         opt.QueueLimit = 0;
     });
+
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 });
 
+// ==========================================
+// JWT AUTHENTICATION
+// ==========================================
 
+var jwtKey = builder.Configuration["Jwt:Key"];
+var jwtIssuer = builder.Configuration["Jwt:Issuer"];
+var jwtAudience = builder.Configuration["Jwt:Audience"];
 
-GoogleCredential credential;
-
-if(!string.IsNullOrEmpty(firebaseJson) && firebaseJson.Trim().StartsWith("{"))
+if (string.IsNullOrWhiteSpace(jwtKey))
 {
-    credential = GoogleCredential.FromJson(firebaseJson);
-}
-else 
-{
-    // Fallback for local development if you are using a path to a file
-    string? credentialPath = builder.Configuration["Firebase:AdminKeyPath"];
-    credential = GoogleCredential.FromFile(credentialPath);
+    throw new InvalidOperationException("JWT signing key is missing.");
 }
 
-if(FirebaseApp.DefaultInstance == null)
+if (string.IsNullOrWhiteSpace(jwtIssuer) ||
+    string.IsNullOrWhiteSpace(jwtAudience))
 {
-    var firebaseApp = FirebaseApp.Create(new AppOptions
-    {
-        Credential = credential
-    });
-
-    builder.Services.AddSingleton(firebaseApp);
+    throw new InvalidOperationException("JWT issuer or audience is missing.");
 }
-else
-{
-    builder.Services.AddSingleton(FirebaseApp.DefaultInstance);
-}
-
-var firebaseProjectId = builder.Configuration["Firebase:ProjectId"];
-
-builder.Services.AddSingleton<FirestoreDb>(provider =>
-{
-    var firestoreBuilder = new FirestoreDbBuilder
-    {
-        ProjectId = firebaseProjectId,
-        Credential = credential
-    };
-    return firestoreBuilder.Build();
-});
-
-builder.Services.AddSingleton<StorageClient>(provider =>
-{
-    return StorageClient.Create(credential);
-});
-
-
-
-    builder.Services.AddScoped<AuthenticationService>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        options.Authority = $"https://securetoken.google.com/{firebaseProjectId}";
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"])),
-
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(jwtKey)
+            ),
 
             ValidateIssuer = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            ValidIssuer = jwtIssuer,
 
             ValidateAudience = true,
-            ValidAudience = builder.Configuration["Jwt:Audience"],
+            ValidAudience = jwtAudience,
 
             ValidateLifetime = true,
-            RoleClaimType = ClaimTypes.Role
+            ClockSkew = TimeSpan.FromMinutes(1),
 
+            RoleClaimType = ClaimTypes.Role
         };
     });
+
+builder.Services.AddAuthorization();
+
+// ==========================================
+// APPLICATION SERVICES
+// ==========================================
+
+builder.Services.AddScoped<AuthenticationService>();
+
+// ==========================================
+// SWAGGER
+// ==========================================
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-//check if the environment is development, if so, allow CORS for localhost:8080 (where the React app is running)
+// ==========================================
+// CORS
+// ==========================================
 
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("PrbfPolicy", policy =>
     {
         policy.WithOrigins(
-                "http://localhost:8080",      // Local Development
-                "http://localhost:5173",      // Standard Vite Port (just in case)
-                "https://phrollball.vercel.app" // Production Frontend
-              )
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();
+            "http://localhost:8080",
+            "http://localhost:5173",
+            "https://phrollball.vercel.app"
+        )
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+        .AllowCredentials();
     });
 });
 
+// ==========================================
+// CONTROLLERS
+// ==========================================
+
 builder.Services.AddControllers();
+
+// ==========================================
+// BUILD APPLICATION
+// ==========================================
 
 var app = builder.Build();
 
-    app.UseSwagger();
-    app.UseSwaggerUI();
+// ==========================================
+// MIDDLEWARE
+// ==========================================
 
-
-
-//app.UseHttpsRedirection();
+app.UseSwagger();
+app.UseSwaggerUI();
 
 app.UseCors("PrbfPolicy");
 
 app.UseAuthentication();
 app.UseAuthorization();
+
 app.UseRateLimiter();
 
+// ==========================================
+// API ROUTES
+// ==========================================
+
 app.MapControllers();
-app.MapGet("/health", async (HttpRequest request, IConfiguration configuration) =>
+
+app.MapGet("/health", (HttpRequest request, IConfiguration configuration) =>
 {
     var secret = configuration["PING_SECRET"];
-
     var header = request.Headers["X-Ping-Secret"].FirstOrDefault();
-    if (header != secret) return Results.Unauthorized();
 
-    return Results.Ok(new { status = "Healthy", timestamp = DateTime.UtcNow });
+    if (string.IsNullOrWhiteSpace(secret) || header != secret)
+    {
+        return Results.Unauthorized();
+    }
+
+    return Results.Ok(new
+    {
+        status = "Healthy",
+        timestamp = DateTime.UtcNow
+    });
 
 }).RequireRateLimiting("HealthCheckLimit");
+
+// ==========================================
+// RUN
+// ==========================================
+
 app.Run();

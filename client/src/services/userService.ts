@@ -1,78 +1,77 @@
+
 import { apiClient } from "@/services/apiClient";
-import { User } from "@/types/user";
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup} from "firebase/auth";
-import { auth, googleProvider } from "@/config/firebase";
+import type {
+    RegisterUser,
+    LoginUser,
+    AuthResponse
+} from "@/types/user";
 
+// REGISTER PLAYER
+export const registerPlayer = async (user: RegisterUser) => {
+    if (user.password !== user.confirmPassword) {
+        throw new Error("Passwords do not match.");
+    }
 
-// first get the type interface 
+    const address = [
+        user.barangay,
+        user.city,
+        user.province,
+        user.region
+    ].filter(Boolean).join(", ");
 
-// write the api call either get, post, path, or delete
+    const payload = {
+        email: user.email.trim().toLowerCase(),
+        password: user.password,
+        contactNumber: user.contactNumber,
+        firstName: user.firstName,
+        middleName: user.middleName,
+        lastName: user.lastName,
+        suffix: user.suffix ?? null,
+        birthDate: user.birthDate,
+        address,
+        sex: user.sex,
+        educationalAttainment: user.educationalAttainment,
+        profileImageUrl: user.profileImageUrl ?? null,
+        nationality: user.nationality,
+        occupation: user.occupation,
+        otherSports: user.otherSports ?? []
+    };
 
-export const registerPlayer = async (user: User) => {
+    const { data } = await apiClient.post(
+        "api/auth/register",
+        payload
+    );
 
-    const userCredential = await createUserWithEmailAndPassword(auth, user.email, user.password);
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const {password, ...dbPayload } = user;
-    user.Uid = userCredential.user.uid
+    // Store the JWT returned after successful registration
+    if (data.token) {
+        localStorage.setItem("jwtToken", data.token);
+        localStorage.setItem("userRole", data.user.role);
+    }
 
-    dbPayload.Uid = userCredential.user.uid
-    const { data } = await apiClient.post("api/user/register", { ...dbPayload});
+    return data as AuthResponse;
+};
 
-    return data;
-}
-
-
-
+// EMAIL AND PASSWORD AUTHENTICATION
 export const authService = {
     login: async (email: string, password: string) => {
-        try {
-            const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const payload: LoginUser = {
+            email: email.trim().toLowerCase(),
+            password
+        };
 
-            const idToken = await userCredential.user.getIdToken();
-            // after successful login, call the api that will issue the jwt token
-            
-            const { data } = await apiClient.post("api/auth/login", { firebaseUserToken: idToken});
-            
-            const customToken = data.token
-            const decodedToken = decodeJwt(data.token);
-            const userRole = decodedToken?.role;
-            localStorage.setItem("jwtToken", customToken);
-            localStorage.setItem("userRole", userRole);
-
-            console.log("Login successful!", data);
-
-            return {customToken, userRole};
-        }catch (error) {
-            console.error("Login failed", error);
-            return null
-        }
-    },
-
-    googleLogin: async() => {
-        const userCredential = await signInWithPopup(auth, googleProvider);
-        const idToken = await userCredential.user.getIdToken();
-
-        console.log(idToken);
-        const { data } = await apiClient.post("api/auth/login", { firebaseUserToen: idToken });
+        const { data } = await apiClient.post<AuthResponse>(
+            "api/auth/login",
+            payload
+        );
 
         localStorage.setItem("jwtToken", data.token);
-        localStorage.setItem("userRole", data.role);
-        return data
-    }
-}
+        localStorage.setItem("userRole", data.user.role);
 
-const decodeJwt = (token: string) => {
-    try {
-        // A JWT has 3 parts separated by dots. The payload is the 2nd part (index 1).
-        const base64Url = token.split('.')[1];
-        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
-            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-        }).join(''));
+        return data;
+    },
 
-        return JSON.parse(jsonPayload);
-    } catch (e) {
-        console.error("Failed to decode JWT", e);
-        return null;
+    logout: () => {
+        localStorage.removeItem("jwtToken");
+        localStorage.removeItem("userRole");
     }
-}
+};

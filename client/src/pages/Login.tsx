@@ -17,24 +17,22 @@ export default function Login() {
 
   // Kung naka-login na, diretso admin
 
-  // 2. Handle Email/Password Login via Firebase
-  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
+const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-      // Firebase checks the password instead of your custom API
-      const data = await loginUser(email, password);
 
-      if(data && data.customToken) {
-        setAuthSession(data.customToken, data.userRole);
-        if(data.userRole === "Admin") {
-          navigate("/admin");
+    const data = await loginUser(email, password);
+
+    if (data && data.token) {
+        setAuthSession(data.token, data.user.role);
+
+        if (data.user.role === "Admin") {
+            navigate("/admin");
         } else {
-          navigate("/login");
+            navigate("/admin/dashboard"); // Redirect to a different page for non-admin users
         }
-      }
-      console.log("Login successful!");
-    
-    
-  };
+    }
+};
+
 
   // Handle Google Login via Firebase
   const handleGoogleLogin = async () => {
